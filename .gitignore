@@ -74,6 +74,7 @@ Desktop.ini
 .idea/tasks.xml
 .idea/usage.statistics.xml
 .idea/dictionaries/
+.idea
 *.swp
 *.swo
 *~
