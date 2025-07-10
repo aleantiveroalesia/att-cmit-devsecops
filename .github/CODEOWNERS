@@ -1,0 +1,226 @@
+# CODEOWNERS - AT&T CMIT DevSecOps Automation
+#
+# Este archivo define quién debe revisar específicamente cada parte del código.
+# Cuando se crea un Pull Request, los owners serán automáticamente añadidos
+# como reviewers requeridos.
+#
+# Sintaxis: ruta @usuario @equipo
+# Más específico tiene precedencia sobre menos específico
+#
+# Referencias:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# =============================================================================
+# GLOBAL OWNERS
+# =============================================================================
+# Estos usuarios/equipos serán owners de todo el repositorio por defecto
+* @att-cmit/devops-team @att-cmit/security-team
+
+# =============================================================================
+# SECURITY-SENSITIVE FILES
+# =============================================================================
+# Archivos relacionados con seguridad requieren revisión del equipo de seguridad
+
+# Políticas y configuraciones de seguridad
+SECURITY.md @att-cmit/security-leads @att-cmit/compliance-team
+.github/workflows/security.yml @att-cmit/security-team @att-cmit/devops-leads
+
+# Configuraciones de secrets y credenciales
+.env.example @att-cmit/security-team
+.gitignore @att-cmit/security-team
+.pre-commit-config.yaml @att-cmit/security-team
+
+# Configuraciones de dependencias que pueden tener impacto de seguridad
+package.json @att-cmit/security-team @att-cmit/dev-leads
+package-lock.json @att-cmit/security-team @att-cmit/dev-leads
+requirements.txt @att-cmit/security-team @att-cmit/dev-leads
+Pipfile @att-cmit/security-team @att-cmit/dev-leads
+
+# =============================================================================
+# INFRASTRUCTURE AS CODE
+# =============================================================================
+# Infraestructura requiere revisión del equipo de plataforma
+
+# Terraform configurations
+/infrastructure/terraform/ @att-cmit/platform-team @att-cmit/infrastructure-leads
+*.tf @att-cmit/platform-team
+*.tfvars @att-cmit/platform-team @att-cmit/security-team
+
+# Kubernetes manifests
+/infrastructure/kubernetes/ @att-cmit/platform-team @att-cmit/k8s-experts
+*.yaml @att-cmit/platform-team
+*.yml @att-cmit/platform-team
+
+# Helm charts
+/infrastructure/helm/ @att-cmit/platform-team @att-cmit/helm-experts
+
+# Docker configurations
+Dockerfile @att-cmit/platform-team @att-cmit/container-experts
+docker-compose.yml @att-cmit/platform-team
+docker-compose.*.yml @att-cmit/platform-team
+
+# =============================================================================
+# CI/CD WORKFLOWS
+# =============================================================================
+# Pipelines de CI/CD requieren revisión del equipo DevOps
+
+/.github/ @att-cmit/devops-team @att-cmit/ci-cd-experts
+/.github/workflows/ @att-cmit/devops-team @att-cmit/github-actions-experts
+
+# Workflows específicos
+/.github/workflows/ci.yml @att-cmit/devops-leads @att-cmit/testing-experts
+/.github/workflows/deploy.yml @att-cmit/devops-leads @att-cmit/deployment-experts
+/.github/workflows/release.yml @att-cmit/devops-leads @att-cmit/release-managers
+
+# Templates de GitHub
+/.github/ISSUE_TEMPLATE/ @att-cmit/project-managers @att-cmit/devops-team
+/.github/PULL_REQUEST_TEMPLATE.md @att-cmit/dev-leads @att-cmit/qa-team
+
+# =============================================================================
+# SOURCE CODE BY DOMAIN
+# =============================================================================
+
+# API y servicios backend
+/src/api/ @att-cmit/backend-team @att-cmit/api-experts
+/src/services/ @att-cmit/backend-team @att-cmit/microservices-experts
+/src/workers/ @att-cmit/backend-team @att-cmit/queue-experts
+
+# Frontend applications
+/src/web/ @att-cmit/frontend-team @att-cmit/ui-experts
+/src/components/ @att-cmit/frontend-team @att-cmit/component-experts
+
+# Shared libraries
+/src/shared/ @att-cmit/dev-leads @att-cmit/architecture-team
+
+# Authentication and authorization
+/src/auth/ @att-cmit/security-team @att-cmit/auth-experts
+/src/*/auth/ @att-cmit/security-team @att-cmit/auth-experts
+
+# Payment processing (crítico)
+/src/payment/ @att-cmit/security-team @att-cmit/payment-experts @att-cmit/compliance-team
+/src/*/payment/ @att-cmit/security-team @att-cmit/payment-experts
+
+# Database migrations y schemas
+/src/database/ @att-cmit/database-team @att-cmit/dba-team
+/migrations/ @att-cmit/database-team @att-cmit/dba-team
+**/migrations/ @att-cmit/database-team
+
+# =============================================================================
+# TESTING
+# =============================================================================
+# Tests requieren revisión de QA y desarrolladores
+
+/tests/ @att-cmit/qa-team @att-cmit/testing-experts
+/tests/security/ @att-cmit/security-team @att-cmit/security-testing-experts
+/tests/performance/ @att-cmit/performance-team @att-cmit/load-testing-experts
+
+# Test configurations
+jest.config.js @att-cmit/testing-experts
+cypress.json @att-cmit/e2e-testing-experts
+playwright.config.js @att-cmit/e2e-testing-experts
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+# Documentación requiere revisión técnica
+
+/docs/ @att-cmit/tech-writers @att-cmit/documentation-team
+README.md @att-cmit/dev-leads @att-cmit/project-managers
+CHANGELOG.md @att-cmit/release-managers @att-cmit/dev-leads
+
+# API Documentation
+/docs/api/ @att-cmit/api-experts @att-cmit/tech-writers
+openapi.yml @att-cmit/api-experts
+swagger.yml @att-cmit/api-experts
+
+# Architecture documentation
+/docs/architecture/ @att-cmit/architecture-team @att-cmit/tech-leads
+
+# =============================================================================
+# CONFIGURATION FILES
+# =============================================================================
+# Archivos de configuración críticos
+
+# Monitoring y observabilidad
+/infrastructure/monitoring/ @att-cmit/sre-team @att-cmit/monitoring-experts
+prometheus.yml @att-cmit/sre-team
+grafana/ @att-cmit/sre-team @att-cmit/monitoring-experts
+
+# Logging configuration
+log4j2.xml @att-cmit/sre-team
+logback.xml @att-cmit/sre-team
+/config/logging/ @att-cmit/sre-team
+
+# =============================================================================
+# SCRIPTS Y AUTOMATION
+# =============================================================================
+# Scripts de automatización y deployment
+
+/scripts/ @att-cmit/devops-team @att-cmit/automation-experts
+/scripts/deploy/ @att-cmit/deployment-experts @att-cmit/devops-leads
+/scripts/security/ @att-cmit/security-team @att-cmit/security-automation-experts
+
+# Makefile y build scripts
+Makefile @att-cmit/build-experts @att-cmit/devops-team
+build.sh @att-cmit/build-experts
+deploy.sh @att-cmit/deployment-experts @att-cmit/devops-leads
+
+# =============================================================================
+# COMPLIANCE Y LEGAL
+# =============================================================================
+# Archivos que requieren revisión legal/compliance
+
+LICENSE @att-cmit/legal-team @att-cmit/compliance-team
+NOTICE @att-cmit/legal-team
+/compliance/ @att-cmit/compliance-team @att-cmit/legal-team
+
+# Privacy y data protection
+PRIVACY.md @att-cmit/privacy-team @att-cmit/legal-team
+/src/privacy/ @att-cmit/privacy-team @att-cmit/security-team
+
+# =============================================================================
+# SPECIFIC TEAM ASSIGNMENTS
+# =============================================================================
+# Asignaciones específicas por experticia
+
+# John Doe - DevSecOps Lead
+/.github/workflows/ @john.doe
+/infrastructure/ @john.doe
+
+# Jane Smith - Security Champion
+/tests/security/ @jane.smith
+SECURITY.md @jane.smith
+
+# Bob Wilson - Infrastructure Lead
+/infrastructure/terraform/ @bob.wilson
+/infrastructure/kubernetes/ @bob.wilson
+
+# Alice Johnson - Frontend Lead
+/src/web/ @alice.johnson
+/src/components/ @alice.johnson
+
+# Mike Chen - Backend Lead
+/src/api/ @mike.chen
+/src/services/ @mike.chen
+
+# =============================================================================
+# FALLBACK REVIEWERS
+# =============================================================================
+# En caso de que no haya owners específicos disponibles
+
+# Team leads como fallback para revisiones críticas
+*.security @att-cmit/security-leads
+*.production @att-cmit/devops-leads
+*.database @att-cmit/database-leads
+
+# =============================================================================
+# EMERGENCY CONTACTS
+# =============================================================================
+# Para cambios que requieren aprobación inmediata
+# (Estos usuarios pueden hacer override de otros reviewers)
+
+# Critical security fixes
+/hotfix/security/ @att-cmit/security-emergency-team @att-cmit/ciso-office
+
+# Production emergency fixes
+/hotfix/production/ @att-cmit/sre-oncall @att-cmit/incident-commanders

@@ -1,0 +1,556 @@
+# GitHub Actions CI Workflow - AT&T CMIT DevSecOps
+#
+# Este workflow se ejecuta en cada push y pull request para validar
+# la calidad del código, ejecutar tests y generar reportes.
+
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: # Permite ejecución manual
+
+# Configuración de concurrencia para cancelar builds anteriores
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Variables de entorno globales
+env:
+  NODE_VERSION: '18.19.0'
+  PYTHON_VERSION: '3.11'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================================================
+  # JOB: QUALITY CHECKS
+  # ==========================================================================
+  quality-checks:
+    name: Quality & Linting
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for better analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install -r requirements-dev.txt
+
+      - name: Run ESLint
+        run: |
+          npm run lint:js
+          npm run lint:js -- --format=json --output-file=eslint-report.json
+        continue-on-error: true
+
+      - name: Run Python linting (flake8)
+        run: |
+          flake8 . --format=json --output-file=flake8-report.json
+        continue-on-error: true
+
+      - name: Run Prettier check
+        run: npm run format:check
+
+      - name: Run type checking
+        run: |
+          npm run type-check
+          mypy . --json-report mypy-report.json
+        continue-on-error: true
+
+      - name: Upload linting reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linting-reports
+          path: |
+            eslint-report.json
+            flake8-report.json
+            mypy-report.json
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB: UNIT TESTS
+  # ==========================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['18.19.0', '20.10.0']
+        python-version: ['3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run JavaScript/TypeScript tests
+        run: |
+          npm run test:unit -- --coverage --ci --watchAll=false
+          npm run test:unit -- --coverage --ci --watchAll=false --outputFile=jest-results.json --json
+        env:
+          CI: true
+
+      - name: Run Python tests
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --junit-xml=pytest-results.xml \
+            --cov-fail-under=80
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.node-version }}-${{ matrix.python-version }}
+          path: |
+            coverage/
+            htmlcov/
+            jest-results.json
+            pytest-results.xml
+            coverage.xml
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info,./coverage.xml
+          flags: unittests
+          name: codecov-${{ matrix.node-version }}-${{ matrix.python-version }}
+          fail_ci_if_error: true
+
+  # ==========================================================================
+  # JOB: INTEGRATION TESTS
+  # ==========================================================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Setup test database
+        run: |
+          npm run db:migrate:test
+          npm run db:seed:test
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run integration tests
+        run: |
+          npm run test:integration -- --ci --watchAll=false
+          pytest tests/integration/ --junit-xml=integration-results.xml
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: |
+            integration-results.xml
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB: E2E TESTS
+  # ==========================================================================
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start application
+        run: |
+          npm run start:test &
+          npx wait-on http://localhost:3000 --timeout 60000
+        env:
+          NODE_ENV: test
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=json --output-dir=playwright-results
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            playwright-results/
+            test-results/
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB: BUILD & CONTAINER
+  # ==========================================================================
+  build:
+    name: Build & Container
+    runs-on: ubuntu-latest
+    needs: [quality-checks, unit-tests]
+    if: github.event.pull_request.draft == false
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 30
+
+  # ==========================================================================
+  # JOB: PERFORMANCE TESTS
+  # ==========================================================================
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start application
+        run: |
+          docker run -d -p 3000:3000 --name app ${{ needs.build.outputs.image-tag }}
+          npx wait-on http://localhost:3000 --timeout 60000
+
+      - name: Run K6 performance tests
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: tests/performance/load-test.js
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          LHCI_SERVER_TOKEN: ${{ secrets.LHCI_SERVER_TOKEN }}
+
+  # ==========================================================================
+  # JOB: ACCESSIBILITY TESTS
+  # ==========================================================================
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start application
+        run: |
+          docker run -d -p 3000:3000 --name app ${{ needs.build.outputs.image-tag }}
+          npx wait-on http://localhost:3000 --timeout 60000
+
+      - name: Run axe accessibility tests
+        run: npm run test:a11y
+
+      - name: Upload accessibility reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-reports
+          path: accessibility-report.json
+          retention-days: 7
+
+  # ==========================================================================
+  # JOB: SONARQUBE ANALYSIS
+  # ==========================================================================
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for better analysis
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download test coverage
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+
+      - name: SonarQube Scan
+        uses: sonarqube-quality-gate-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+
+  # ==========================================================================
+  # JOB: STATUS CHECK
+  # ==========================================================================
+  status-check:
+    name: Status Check
+    runs-on: ubuntu-latest
+    needs:
+      - quality-checks
+      - unit-tests
+      - integration-tests
+      - e2e-tests
+      - build
+      - sonarqube
+    if: always() && github.event.pull_request.draft == false
+
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [[ "${{ needs.quality-checks.result }}" == "failure" || 
+                "${{ needs.unit-tests.result }}" == "failure" || 
+                "${{ needs.integration-tests.result }}" == "failure" || 
+                "${{ needs.e2e-tests.result }}" == "failure" || 
+                "${{ needs.build.result }}" == "failure" || 
+                "${{ needs.sonarqube.result }}" == "failure" ]]; then
+            echo "One or more critical jobs failed"
+            exit 1
+          else
+            echo "All critical jobs passed"
+          fi
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo, number } = context.issue;
+            const runId = context.runId;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: number,
+              body: `✅ All CI checks passed! [View details](${runUrl})`
+            });
+
+  # ==========================================================================
+  # JOB: CLEANUP
+  # ==========================================================================
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: [status-check]
+    if: always()
+
+    steps:
+      - name: Delete old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+            
+            // Keep only the latest 5 artifacts
+            const sortedArtifacts = artifacts.data.artifacts.sort(
+              (a, b) => new Date(b.created_at) - new Date(a.created_at)
+            );
+            
+            for (const artifact of sortedArtifacts.slice(5)) {
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id,
+              });
+            }
