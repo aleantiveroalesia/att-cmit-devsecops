@@ -222,5 +222,7 @@ SECURITY.md @jane.smith
 # Critical security fixes
 /hotfix/security/ @att-cmit/security-emergency-team @att-cmit/ciso-office
 
+# Ejemplo
+
 # Production emergency fixes
 /hotfix/production/ @att-cmit/sre-oncall @att-cmit/incident-commanders
