@@ -1,4 +1,4 @@
-# Security Policy
+# Security Policy Updated
 
 ## 🔒 AT&T CMIT DevSecOps Security Guidelines
 
