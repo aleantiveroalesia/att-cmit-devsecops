@@ -1,7 +1,7 @@
 {
   "name": "att-cmit-devsecops-automation",
   "version": "2.1.0",
-  "description": "Sistema de automatización DevSecOps para el equipo CMIT de AT&T",
+  "description": "Sistema de automatización DevSecOps para el equipo CMIT de AT&T, con cambios en la visualizacion de información",
   "main": "dist/index.js",
   "type": "module",
   "engines": {
