@@ -1,5 +1,5 @@
 ## Descripción
-Breve descripción de los cambios realizados.
+Agregar nueva descripcion
 
 ## Tipo de Cambio
 - [ ] Bug fix
