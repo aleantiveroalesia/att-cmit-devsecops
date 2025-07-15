@@ -8,8 +8,6 @@
 
 ## 📋 Descripción
 
-Prueba
-
 Sistema de automatización DevSecOps para el equipo CMIT (Core Management and Infrastructure Technology) de AT&T. Este proyecto integra seguridad en cada fase del ciclo de desarrollo, desde el código hasta la producción, implementando las mejores prácticas de la industria.
 
 ### 🎯 Objetivos Principales
