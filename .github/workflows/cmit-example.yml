@@ -1,0 +1,68 @@
+# .github/workflows/cmit-example.yml
+name: CMIT CI/CD Pipeline                    # Nombre del workflow
+
+on:                                          # Eventos activadores
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'                     # Ejecutar diariamente a las 2 AM
+
+env:                                         # Variables de entorno globales
+  JAVA_VERSION: '17'
+  NODE_VERSION: '18'
+
+jobs:                                        # Definición de jobs
+  security-scan:                            # Job 1: Análisis de seguridad
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository             # Step 1: Obtener código
+        uses: actions/checkout@v3
+
+      - name: Setup Java                      # Step 2: Configurar Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Run Veracode scan              # Step 3: Scan de seguridad
+        run: |
+          echo "Ejecutando análisis de seguridad con Veracode..."
+          # Comandos de Veracode aquí
+
+  build:                                    # Job 2: Build de aplicación
+    needs: security-scan                    # Depende del job anterior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Maven dependencies        # Optimización con cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+
+      - name: Build with Maven               # Build de la aplicación
+        run: mvn clean package
+
+      - name: Upload to JFrog Artifactory    # Subir artefactos
+        run: |
+          echo "Subiendo artefactos a JFrog Artifactory..."
+          # Comandos de JFrog aquí
+
+  deploy:                                   # Job 3: Deployment
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'     # Solo en rama main
+    environment: production                  # Entorno de producción
+    steps:
+      - name: Deploy with ArgoCD
+        run: |
+          echo "Desplegando con ArgoCD..."
+          # Comandos de ArgoCD aquí
